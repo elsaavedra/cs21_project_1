@@ -6,13 +6,13 @@ As of **_May 06 2024_**, the following have been implemented:
 - [x] Create a `symboltable.txt` containing the labels of instructions
 - [x] Finish first pass of assembler
 - [x] Implement R-Type instruction identifier
-- [] Implement I-Type instruction identifier
-- [] Implement J-Type instruction identifier
-- [] Implement pseudocode instruction identifier
-- [] Implement `macros.asm`
-- [] Finish second pass of assembler
-- [] Execute MIPS code in console
-- [] Polish final code for submission
+- [ ] Implement I-Type instruction identifier
+- [ ] Implement J-Type instruction identifier
+- [ ] Implement pseudocode instruction identifier
+- [ ] Implement `macros.asm`
+- [ ] Finish second pass of assembler
+- [ ] Execute MIPS code in console
+- [ ] Polish final code for submission
 
 ## Macro file
 To be implemented.
