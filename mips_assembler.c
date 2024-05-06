@@ -37,6 +37,40 @@ unsigned int register_imp(char *reg_input, int k, int move_check, int *reg_type)
             break;
         }
     }
+    return 0;
+}
+
+int r_type_check(int j, char *input, unsigned int *machine_code, int *type_check){
+    for(j = 0; j < 7; j++){
+        if(strcmp(input, r_type_list[j]) == 0){
+            *type_check = 1;
+            switch(j){
+                case 0:
+                    *machine_code += 32;
+                    break;
+                case 1:
+                    *machine_code += 34;
+                    break;
+                case 2:
+                    *machine_code += 36;
+                    break;
+                case 3:
+                    *machine_code += 37;
+                    break;
+                case 4:
+                    *machine_code += 42;
+                    break;
+                case 5: //psudoinstruction
+                    *machine_code += 32;
+                    break;
+                case 6: 
+                    *machine_code += 8;
+                    break;
+            }
+            printf("R instruction \'%s\' with address: ", input);
+            break;
+        }
+    }
 }
 
 void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
@@ -54,6 +88,7 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
     int label_inst; // 0 = no label in instruction, 1 = has label in instruction
 	int inst_or_reg;  // 0 = instruction, 1 = register
 	int segment_part; // 0 = part of text segment, 1 = start of data segment
+    int continue_check; // 0 = do not continue, 1 = continue
 
     //tertiary boolean
     int register_type; // 0 = rd, 1 = rs, 2 = rt
@@ -146,50 +181,22 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
             else if (pass_check){ //instruction found
                 instruction_in_hex = 0;
                 // r type check
-                for(j = 0; j < 7; j++){
-                    if(strcmp(input_line, r_type_list[j]) == 0){
-                        r_type = 1;
-                        switch(j){
-                            case 0:
-                                instruction_in_hex += 32;
-                                break;
-                            case 1:
-                                instruction_in_hex += 34;
-                                break;
-                            case 2:
-                                instruction_in_hex += 36;
-                                break;
-                            case 3:
-                                instruction_in_hex += 37;
-                                break;
-                            case 4:
-                                instruction_in_hex += 42;
-                                break;
-                            case 5: //psudoinstruction
-                                instruction_in_hex += 32;
-                                break;
-                            case 6: 
-                                instruction_in_hex += 8;
-                                break;
-                        }
-                        printf("R instruction \'%s\' with address: %08x\n", input_line, pc);
-                        continue;
-                    }
-                }
-
+                continue_check = r_type_check(j, input_line, &instruction_in_hex, &r_type);
+                
                 // i type check
-                for(int j = 0; j < 8; j++){
+                for(j = 0; j < 8; j++){
                     if(strcmp(input_line, i_type_list[j]) == 0){
-                        printf("I instruction \'%s\' with address: %08x\n", input_line, pc);
+                        printf("I instruction \'%s\' with address: ", input_line);
                     }
                 }
 
                 // j type check
-                for(int j = 0; j < 2; j++){
+                for(j = 0; j < 2; j++){
                     if(strcmp(input_line, j_type_list[j]) == 0){
-                        printf("J instruction \'%s\' with address: %08x\n", input_line, pc);
+                        printf("J instruction \'%s\' with address: ", input_line);
                     }
-                }                
+                }
+                printf("%08x\n", pc);
             }
 		}
 		else{
