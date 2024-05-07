@@ -20,7 +20,6 @@ void add_symboltable(FILE *stream, char *label, unsigned int address){
 unsigned int register_imp(char *reg_input, int k, int move_check, int *reg_type){
     for(k = 0; k < 31; k++){
         if(strcmp(reg_input, register_filenames[k]) == 0){
-            printf("k = %d\n", k);
             switch(*reg_type){
                 case 0: // rd
                     return (k << 11);
@@ -41,7 +40,7 @@ unsigned int register_imp(char *reg_input, int k, int move_check, int *reg_type)
     return 0;
 }
 
-int r_type_check(int j, char *input, unsigned int *machine_code, int *type_check){
+void r_type_check(int j, char *input, unsigned int *machine_code, int *type_check){
     for(j = 0; j < 7; j++){
         if(strcmp(input, r_type_list[j]) == 0){
             *type_check = 1;
@@ -69,7 +68,62 @@ int r_type_check(int j, char *input, unsigned int *machine_code, int *type_check
                     break;
             }
             printf("R instruction \'%s\' with address: ", input);
-            break;
+        }
+    }
+}
+
+void i_type_check(int j, char *input, unsigned int *machine_code, int *type_check){
+    int var = 0;
+    for(j = 0; j < 8; j++){
+        if(strcmp(input, r_type_list[j]) == 0){
+            *type_check = 1;
+            switch(j){
+                case 0: // addi
+                    var = 8;
+                    break;
+                case 1: // addiu
+                    var = 9;
+                    break;
+                case 2: // beq
+                    var = 4;
+                    break;
+                case 3: // bne
+                    var = 5;
+                    break;
+                case 4: // sw
+                    var = 43;
+                    break;
+                case 5: // lw
+                    var = 35;
+                    break; 
+                case 6: // lui
+                    var = 15;
+                    break;
+                case 7: // ori
+                    var = 15;
+                    break;
+            }
+            *machine_code += (var << 26); //opcode
+            printf("I instruction \'%s\' with address: ", input);
+        }
+    }
+}
+
+void j_type_check(int j, char *input, unsigned int *machine_code, int *type_check){
+    int var;
+    for(j = 0; j < 2; j++){
+        if(strcmp(input, r_type_list[j]) == 0){
+            *type_check = 1;
+            switch(j){ // j
+                case 0:
+                    var = 2;
+                    break;
+                case 1: // jal
+                    var = 3;
+                    break;
+            }
+            *machine_code += (var << 26);
+            printf("J instruction \'%s\' with address: ", input);
         }
     }
 }
@@ -89,7 +143,7 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
     int label_inst; // 0 = no label in instruction, 1 = has label in instruction
     int inst_or_reg;  // 0 = instruction, 1 = register
     int segment_part; // 0 = part of text segment, 1 = start of data segment
-    int continue_check; // 0 = do not continue, 1 = continue
+    //int continue_check; // 0 = do not continue, 1 = continue
 
     //tertiary boolean
     int register_type; // 0 = rd, 1 = rs, 2 = rt
@@ -182,9 +236,10 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
             else if (pass_check){ //instruction found
                 instruction_in_hex = 0;
                 // r type check
-                continue_check = r_type_check(j, input_line, &instruction_in_hex, &r_type);
+                r_type_check(j, input_line, &instruction_in_hex, &r_type);
 
                 // i type check
+                i_type_check(j, input_line, &instruction_in_hex, &r_type);
                 for(j = 0; j < 8; j++){
                     if(strcmp(input_line, i_type_list[j]) == 0){
                         printf("I instruction \'%s\' with address: ", input_line);
@@ -192,6 +247,7 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                 }
 
                 // j type check
+                j_type_check(j, input_line, &instruction_in_hex, &r_type);
                 for(j = 0; j < 2; j++){
                     if(strcmp(input_line, j_type_list[j]) == 0){
                         printf("J instruction \'%s\' with address: ", input_line);
