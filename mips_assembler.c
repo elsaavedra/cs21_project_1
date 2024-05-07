@@ -75,7 +75,7 @@ void r_type_check(int j, char *input, unsigned int *machine_code, int *type_chec
 void i_type_check(int j, char *input, unsigned int *machine_code, int *type_check){
     int var = 0;
     for(j = 0; j < 8; j++){
-        if(strcmp(input, r_type_list[j]) == 0){
+        if(strcmp(input, i_type_list[j]) == 0){
             *type_check = 1;
             switch(j){
                 case 0: // addi
@@ -112,7 +112,7 @@ void i_type_check(int j, char *input, unsigned int *machine_code, int *type_chec
 void j_type_check(int j, char *input, unsigned int *machine_code, int *type_check){
     int var;
     for(j = 0; j < 2; j++){
-        if(strcmp(input, r_type_list[j]) == 0){
+        if(strcmp(input, j_type_list[j]) == 0){
             *type_check = 1;
             switch(j){ // j
                 case 0:
@@ -239,20 +239,10 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                 r_type_check(j, input_line, &instruction_in_hex, &r_type);
 
                 // i type check
-                i_type_check(j, input_line, &instruction_in_hex, &r_type);
-                for(j = 0; j < 8; j++){
-                    if(strcmp(input_line, i_type_list[j]) == 0){
-                        printf("I instruction \'%s\' with address: ", input_line);
-                    }
-                }
+                i_type_check(j, input_line, &instruction_in_hex, &i_type);
 
                 // j type check
-                j_type_check(j, input_line, &instruction_in_hex, &r_type);
-                for(j = 0; j < 2; j++){
-                    if(strcmp(input_line, j_type_list[j]) == 0){
-                        printf("J instruction \'%s\' with address: ", input_line);
-                    }
-                }
+                // j_type_check(j, input_line, &instruction_in_hex, &j_type);
                 printf("%08x\n", pc);
             }
         }
