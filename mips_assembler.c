@@ -12,12 +12,13 @@ char *register_filenames[32] = {"$0", "$at", "$v0", "$v1", "$a0", "$a1", "$a2", 
 char *r_type_list[7] = {"add", "sub", "and", "or", "slt", "move", "jr"};
 char *i_type_list[8] = {"addi", "addiu", "beq", "bne", "sw", "lw", "lui", "ori"};
 char *j_type_list[2] = {"j", "jal"};
+char *pseudo_list[2] = {"li", "la"};
 
 void add_symboltable(FILE *stream, char *label, unsigned int address){
     fprintf(stream, "%s    0x%08x\n", label, address);
 }
 
-unsigned int register_imp(char *reg_input, int k, int move_check, int *reg_type){
+unsigned int register_imp(char *reg_input, int k, int move_check, int *reg_type){    
     for(k = 0; k < 31; k++){
         if(strcmp(reg_input, register_filenames[k]) == 0){
             switch(*reg_type){
@@ -40,10 +41,15 @@ unsigned int register_imp(char *reg_input, int k, int move_check, int *reg_type)
     return 0;
 }
 
-void r_type_check(int j, char *input, unsigned int *machine_code, int *type_check){
+void r_type_check(int j, char *input, unsigned int *machine_code, int *type_check, int *cont){
+    if(*cont){
+        return;
+    }
+    
     for(j = 0; j < 7; j++){
         if(strcmp(input, r_type_list[j]) == 0){
             *type_check = 1;
+            *cont = 1;
             switch(j){
                 case 0:
                     *machine_code += 32;
@@ -72,11 +78,16 @@ void r_type_check(int j, char *input, unsigned int *machine_code, int *type_chec
     }
 }
 
-void i_type_check(int j, char *input, unsigned int *machine_code, int *type_check){
+void i_type_check(int j, char *input, unsigned int *machine_code, int *type_check, int *cont){
+    if(*cont){
+        return;
+    }
+    
     int var = 0;
     for(j = 0; j < 8; j++){
         if(strcmp(input, i_type_list[j]) == 0){
             *type_check = 1;
+            *cont = 1;
             switch(j){
                 case 0: // addi
                     var = 8;
@@ -103,17 +114,22 @@ void i_type_check(int j, char *input, unsigned int *machine_code, int *type_chec
                     var = 15;
                     break;
             }
-            *machine_code += (var << 26); //opcode
+            *machine_code += (var << 26); // opcode
             printf("I instruction \'%s\' with address: ", input);
         }
     }
 }
 
-void j_type_check(int j, char *input, unsigned int *machine_code, int *type_check){
+void j_type_check(int j, char *input, unsigned int *machine_code, int *type_check, int *cont){
+    if(*cont){
+        return;
+    }
+    
     int var;
     for(j = 0; j < 2; j++){
         if(strcmp(input, j_type_list[j]) == 0){
             *type_check = 1;
+            *cont = 1;
             switch(j){ // j
                 case 0:
                     var = 2;
@@ -122,7 +138,7 @@ void j_type_check(int j, char *input, unsigned int *machine_code, int *type_chec
                     var = 3;
                     break;
             }
-            *machine_code += (var << 26);
+            *machine_code += (var << 26); // opcode
             printf("J instruction \'%s\' with address: ", input);
         }
     }
@@ -138,12 +154,13 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
 
     //boolean
     int r_type; // 0 = non r_type, 1 = r_type
-    int i_type; // 0 = non r_type, 1 = r_type
-    int j_type; // 0 = non r_type, 1 = r_type
+    int i_type; // 0 = non i_type, 1 = i_type
+    int j_type; // 0 = non j_type, 1 = j_type
+    int pseudo; // 0 = non pseudo, 1 = psudo
     int label_inst; // 0 = no label in instruction, 1 = has label in instruction
     int inst_or_reg;  // 0 = instruction, 1 = register
     int segment_part; // 0 = part of text segment, 1 = start of data segment
-    //int continue_check; // 0 = do not continue, 1 = continue
+    int continue_check; // 0 = do not continue, 1 = continue
 
     //tertiary boolean
     int register_type; // 0 = rd, 1 = rs, 2 = rt
@@ -184,6 +201,8 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                 if(pass_check){
                     if(strcmp(input_line, "syscall") == 0){ //edgecase: syscall has no registers
                         printf("syscall instruction with address: %08x\n", pc);
+                        instruction_in_hex = 0;
+                        printf("--> machine code of current instruction: %08x\n", instruction_in_hex);
                     }
                     else{
                         printf("--> register names: %s\n", input_line);
@@ -204,10 +223,30 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                             printf("--> machine code of current instruction: %08x\n", instruction_in_hex);
                         }
                         else if(i_type){ // rs,rt,imm
-
+                            register_type = 0;
+                            reg = strtok(input_line, ",");
+                            while(reg != NULL){
+                                // instruction_in_hex += register_imp(reg, k, j, &register_type);
+                                // printf("%s\n", reg);
+                                reg = strtok(NULL, ",");
+                                register_type++;
+                            }
                         }
                         else if(j_type){ // label
+                            char temp_label[CHAR_LIMIT];
+                            unsigned int temp_address;
 
+                            fseek(sym_table, 0, SEEK_SET);
+                            fscanf(sym_table, "%s    0x%08x\n", temp_label, &temp_address);
+                            printf("labels found: %s with inst address %08x\n", temp_label, temp_address);
+                            while(strcmp(input_line, temp_label)!= 0){
+                                fscanf(sym_table, "%s    0x%08x", temp_label, &temp_address);
+                                // ends when a label is found; will ALWAYS terminate
+                            }
+                            temp_address = temp_address & 0x0FFFFFFF; // bit masking
+                            temp_address = temp_address >> 2;
+                            instruction_in_hex += temp_address;
+                            printf("--> machine code of current instruction: %08x\n", instruction_in_hex);
                         }
                         else{
                             printf("there's a problem houston\n");
@@ -235,14 +274,15 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
             }
             else if (pass_check){ //instruction found
                 instruction_in_hex = 0;
+                continue_check = 0;
                 // r type check
-                r_type_check(j, input_line, &instruction_in_hex, &r_type);
+                r_type_check(j, input_line, &instruction_in_hex, &r_type, &continue_check);
 
                 // i type check
-                i_type_check(j, input_line, &instruction_in_hex, &i_type);
+                i_type_check(j, input_line, &instruction_in_hex, &i_type, &continue_check);
 
                 // j type check
-                // j_type_check(j, input_line, &instruction_in_hex, &j_type);
+                j_type_check(j, input_line, &instruction_in_hex, &j_type, &continue_check);
                 printf("%08x\n", pc);
             }
         }
@@ -260,7 +300,7 @@ int main(void) {
         exit(1);
     }
 
-    // create / edit symboltable file
+    // create symboltable file
     FILE *sym_table = fopen("symboltable.txt", "w+");
 
     int lines;
