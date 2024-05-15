@@ -1,3 +1,6 @@
+// call macros C file
+#include "macros.h"
+
 #include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,6 +16,7 @@ char *r_type_list[7] = {"add", "sub", "and", "or", "slt", "move", "jr"};
 char *i_type_list[8] = {"addi", "addiu", "beq", "bne", "sw", "lw", "lui", "ori"};
 char *j_type_list[2] = {"j", "jal"};
 char *pseudo_list[2] = {"li", "la"};
+char *macro_list[5] = {"print_str", "read_str", "print_integer", "read_integer", "exit"};
 
 void add_symboltable(FILE *stream, char *label, unsigned int address){
     fprintf(stream, "%s    0x%08x\n", label, address);
@@ -305,6 +309,7 @@ void j_type_check(int *j, char *input, unsigned int *machine_code, int *type_che
 }
 
 void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
+    // general variables
     char input_line[CHAR_LIMIT];
     char newline_check;
     unsigned int pc = 0x00400000;
@@ -312,7 +317,7 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
     unsigned int instruction_in_hex;
     int input_string_len;
 
-    //boolean
+    // boolean
     int r_type; // 0 = non r_type, 1 = r_type
     int i_type; // 0 = non i_type, 1 = i_type
     int j_type; // 0 = non j_type, 1 = j_type
@@ -323,15 +328,26 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
     int continue_check; // 0 = do not continue, 1 = continue
     int macros = 0;
 
-    //tertiary boolean
+    // tertiary boolean
     int register_type; // 0 = rd, 1 = rs, 2 = rt
 
-    //for register parsing
+    // for register parsing
     char *reg;
 
+    // for pseudoinstruction parsing
+    unsigned int temp_imm = 0;
+    unsigned int upper_imm = 0;
+    char *temp_reg;
+    char temp_label[CHAR_LIMIT];
+
+    // for macros parsing
+    char macro_label[CHAR_LIMIT];
+    
+    // iterations
     int i = 0;
     int j = 0;
     int k = 0;
+    
     while (i < N) {
         // scan each line and check if whitespace or newline
         fscanf(fp, "%s%c", input_line, &newline_check);
@@ -361,13 +377,36 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
             }
             else {
                 if(pass_check){
-                    if(strcmp(input_line, "syscall") == 0){ //edgecase: syscall has no registers
+                    strcpy(macro_label, input_line);
+                    strtok(macro_label, "(");
+                    
+                    if(strcmp(input_line, "syscall") == 0){ // edgecase: syscall has no registers
                         printf("syscall instruction with address: %08x\n", pc);
                         instruction_in_hex = 0;
                         printf("--> machine code of current instruction: %08x\n", instruction_in_hex);
                     }
+                    else if(strcmp(input_line, macro_label) && i_type == 0){ // macro is found if the condition is non-zero
+                        printf("macro instruction (\"%s\") with address: %08x\n", macro_label, pc);
+                        // macro pulling from macros.c
+                        if(strcmp(macro_list[0], macro_label) == 0){
+                            printf("%s", print_str());
+                        }
+                        else if(strcmp(macro_list[1], macro_label) == 0){
+                            printf("%s", read_str());
+                        }
+                        else if(strcmp(macro_list[2], macro_label) == 0){
+                            printf("%s", print_integer());
+                        }
+                        else if(strcmp(macro_list[3], macro_label) == 0){
+                            printf("%s", read_integer());
+                        }
+                        else if(strcmp(macro_list[4], macro_label) == 0){
+                            printf("%s", exit_macro());
+                        }
+                    }
                     else{
                         // printf("--> register names: %s\n", input_line);
+                        instruction_in_hex = 0;
                         if(r_type){ // rs,rt,rd
                             if(j == 6){ //special case; why is jr an r type
                                 register_type = 1;
@@ -397,18 +436,18 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                             printf("--> machine code of current instruction: %08x\n", instruction_in_hex);
                         }
                         else if(j_type){ // label
-                            unsigned int non_parsed_addr = label_hunting(sym_table, input_line);
-                            non_parsed_addr = non_parsed_addr & 0x0FFFFFFF; // bit masking
-                            non_parsed_addr = non_parsed_addr >> 2;
-                            instruction_in_hex += non_parsed_addr;
-                            
+                            if(macros && strcmp(input_line, "GCD") == 0){ // special case for GCD: requires jal
+                                instruction_in_hex += 0x0C004000;
+                            }
+                            else{
+                                unsigned int non_parsed_addr = label_hunting(sym_table, input_line);
+                                non_parsed_addr = non_parsed_addr & 0x0FFFFFFF; // bit masking
+                                non_parsed_addr = non_parsed_addr >> 2;
+                                instruction_in_hex += non_parsed_addr;
+                            }                            
                             printf("--> machine code of current instruction: %08x\n", instruction_in_hex);
                         }
                         else if(pseudo){ // dependent on what pseudocode
-                            unsigned int temp_imm = 0;
-                            unsigned int upper_imm = 0;
-                            char *temp_reg;
-                            char temp_label[CHAR_LIMIT];
                             if(pseudo == 1){ // li
                                 register_type = 0;
                                 reg = strtok(input_line, ",");
@@ -574,9 +613,10 @@ int main(void) {
     fscanf(fp, "%d", &lines);
     printf("%d\n", lines); //sanity check
 
-    // get inputs line by line
+    // first pass start
     assembler_pass(lines, fp, sym_table, 0);
     printf("Assemble: First-pass complete...\n");
+    
     // second pass start
     fseek(fp, 0, SEEK_SET);
     fscanf(fp, "%d", &lines);
