@@ -28,16 +28,16 @@ unsigned int label_hunting(FILE *sym_table, char *label){
         fscanf(sym_table, "%s    0x%08x", temp_label, &temp_address);
         // ends when a label is found; will ALWAYS terminate
     }
-    printf("---->labels found: %s with inst address %08x\n", temp_label, temp_address);
+    // printf("---->labels found: %s with inst address %08x\n", temp_label, temp_address);
     
     return temp_address;
 }
 
-unsigned int register_imp_r(char *reg_input, int k, int move_check, int *reg_type){    
-    for(k = 0; k < 31; k++){
+unsigned int register_imp_r(char *reg_input, int k, int j, int *reg_type){    
+    for(k = 0; k < 32; k++){
         if(strcmp(reg_input, register_filenames[k]) == 0){
             switch(*reg_type){
-                case 0: // rd
+                case 0: // rd                    
                     return (k << 11);
                     break;
                 case 1: // rs
@@ -57,6 +57,9 @@ unsigned int register_imp_i(char *reg, int k, int j, FILE *sym_table, int char_t
     int reg_type; // 0 = rs, 1 = rt, 2 = imm, 3 = label
     int imm = 0;
     int label_addr = 0;
+    int start = 0;
+    int len = strlen(reg);
+    char reg_parsed[100];
     char *memory;
     
     if (j == 0 || j == 1 || j == 7){ // rs, rt, imm
@@ -86,7 +89,7 @@ unsigned int register_imp_i(char *reg, int k, int j, FILE *sym_table, int char_t
                 break;
         }
     }
-    else if (j == 4){ // rt, imm(rs)
+    else if (j == 4){ // rt, imm(rs); WARNING: lw rs, label IS NOT IMPLEMENTED
         switch(char_type){
             case 0:
                 reg_type = 1;
@@ -94,10 +97,25 @@ unsigned int register_imp_i(char *reg, int k, int j, FILE *sym_table, int char_t
             case 1:
                 imm = strtol(reg, &memory, 10);
                 reg_type = 0;
+                for(int i = 0; i < len; i++){
+                    if(start){
+                        if(reg[i] == ')'){
+                            reg_parsed[start-1] = '\0';
+                            break;
+                        }
+                        reg_parsed[start-1] = reg[i];
+                        start++;
+                    }
+                    else if(reg[i] == '('){
+                        start++;
+                    }
+                }
+                // printf("%s", reg_parsed);
+                // printf("%d", !strcmp(reg_parsed, "$sp"));
                 break;
         }
     }
-    else if (j == 5){ // rs, imm(rt)
+    else if (j == 5){ // rs, imm(rt); WARNING: lw rs, label IS NOT IMPLEMENTED
         switch(char_type){
             case 0:
                 reg_type = 0;
@@ -105,6 +123,19 @@ unsigned int register_imp_i(char *reg, int k, int j, FILE *sym_table, int char_t
             case 1:
                 imm = strtol(reg, &memory, 10);
                 reg_type = 1;
+                for(int i = 0; i < len; i++){
+                    if(start){
+                        if(reg[i] == ')'){
+                            reg_parsed[start-1] = '\0';
+                            break;
+                        }
+                        reg_parsed[start-1] = reg[i];
+                        start++;
+                    }
+                    else if(reg[i] == '('){
+                        start++;
+                    }
+                }
                 break;
         }
     }
@@ -122,15 +153,31 @@ unsigned int register_imp_i(char *reg, int k, int j, FILE *sym_table, int char_t
 
     //for rs and rt
     if (reg_type == 0 || reg_type == 1){
-        for(k = 0; k < 31; k++){
-            if(!strcmp(reg, register_filenames[k]) && reg_type == 1){
-                printf("rt found\n");
-                return (k << 15);
+        for(k = 0; k < 32; k++){
+            if(j == 5 && !strcmp(reg_parsed, register_filenames[k]) && reg_type == 1){ // lw
+                // imm
+                if (reg[0] == '-'){
+                    imm = (imm ^ (1 << 15)) + 1;
+                    // printf("%d\n", imm);
+                }
+                
+                return (k << 16) + imm;
             }
-            if(j == 6){ break; }
-            if(!strcmp(reg, register_filenames[k]) && reg_type == 0){
-                printf("rs found\n");
-                return (k << 20);
+            else if(j == 4 && !strcmp(reg_parsed, register_filenames[k]) && reg_type == 0){ // sw
+                // imm
+                if (reg[0] == '-'){
+                    imm = (imm ^ (1 << 15)) + 1;
+                    // printf("%d\n", imm);
+                }
+                
+                return (k << 21) + imm;
+            }
+            else if(!strcmp(reg, register_filenames[k]) && reg_type == 1){ // general
+                return (k << 16);
+            }
+            else if(j == 6){ break; }
+            else if(!strcmp(reg, register_filenames[k]) && reg_type == 0){ // general
+                return (k << 21);
             }
         }
     }
@@ -138,11 +185,11 @@ unsigned int register_imp_i(char *reg, int k, int j, FILE *sym_table, int char_t
     // check if immediate is negative (for 2C)
     if (reg_type == 3){ // label exists; do not add immediate
         label_addr = label_hunting(sym_table, reg);
-        return (label_addr - pc);
+        return ((label_addr - pc - 4) / 4);
     }
     if (reg[0] == '-'){
-        imm = imm;
-        printf("%d\n", imm);
+        imm = (imm ^ (1 << 15)) + 1;
+        // printf("%d\n", imm);
         return imm;
     }
     else if (imm >= 0 && imm < 65536){
@@ -161,25 +208,25 @@ void r_type_check(int *j, char *input, unsigned int *machine_code, int *type_che
             *type_check = 1;
             *cont = 1;
             switch(*j){
-                case 0:
+                case 0: // add
                     *machine_code += 32;
                     break;
-                case 1:
+                case 1: // sub
                     *machine_code += 34;
                     break;
-                case 2:
+                case 2: // and
                     *machine_code += 36;
                     break;
-                case 3:
+                case 3: // or
                     *machine_code += 37;
                     break;
-                case 4:
+                case 4: // slt
                     *machine_code += 42;
                     break;
-                case 5: //psudoinstruction
+                case 5: // psudoinstruction; move
                     *machine_code += 32;
                     break;
-                case 6: 
+                case 6: // jr
                     *machine_code += 8;
                     break;
             }
@@ -222,7 +269,7 @@ void i_type_check(int *j, char *input, unsigned int *machine_code, int *type_che
                     var = 15;
                     break;
                 case 7: // ori
-                    var = 15;
+                    var = 13;
                     break;
             }
             *machine_code += (var << 26); // opcode
@@ -272,8 +319,9 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
     int pseudo; // 0 = non pseudo, 1 = psudo
     int label_inst; // 0 = no label in instruction, 1 = has label in instruction
     int inst_or_reg;  // 0 = instruction, 1 = register
-    int segment_part; // 0 = part of text segment, 1 = start of data segment
+    int segment_part = 0; // 0 = part of text segment, 1 = start of data segment
     int continue_check; // 0 = do not continue, 1 = continue
+    int macros = 0;
 
     //tertiary boolean
     int register_type; // 0 = rd, 1 = rs, 2 = rt
@@ -284,13 +332,14 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
     int i = 0;
     int j = 0;
     int k = 0;
-    while (i <= N) {
+    while (i < N) {
         // scan each line and check if whitespace or newline
         fscanf(fp, "%s%c", input_line, &newline_check);
 
         // check for .text, .data, .include “macros.asm”
         if (strcmp(input_line, ".include") == 0) {
             fscanf(fp, "%s%c", input_line, &newline_check); // checks file name of macros
+            macros = 1; // for convention
         } 
         else if (strcmp(input_line, ".text") == 0) {
             segment_part = 0;
@@ -318,10 +367,11 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                         printf("--> machine code of current instruction: %08x\n", instruction_in_hex);
                     }
                     else{
-                        printf("--> register names: %s\n", input_line);
+                        // printf("--> register names: %s\n", input_line);
                         if(r_type){ // rs,rt,rd
                             if(j == 6){ //special case; why is jr an r type
-                                printf("$jr, will implement\n");
+                                register_type = 1;
+                                instruction_in_hex += register_imp_r(input_line, k, j, &register_type);
                             }
                             else{
                                 register_type = 0;
@@ -355,16 +405,87 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                             printf("--> machine code of current instruction: %08x\n", instruction_in_hex);
                         }
                         else if(pseudo){ // dependent on what pseudocode
-                            long temp_imm = 0;
+                            unsigned int temp_imm = 0;
+                            unsigned int upper_imm = 0;
+                            char *temp_reg;
+                            char temp_label[CHAR_LIMIT];
                             if(pseudo == 1){ // li
-                                // lui
-                                pc += 4;
-                                // ori
+                                register_type = 0;
+                                reg = strtok(input_line, ",");
+                                while(reg != NULL){
+                                    if(reg[0] == '$'){ // register to be stored
+                                        temp_reg = reg;
+                                    }
+                                    else { // immediate in decimal
+                                         sscanf(reg, "%d", &temp_imm);
+                                         if(temp_imm < 65536){ // decimals less than 65536 will have lui as 0x0
+                                            instruction_in_hex = 0x3C010000;
+                                            printf("--> machine code of current instruction: %08x\n", instruction_in_hex);
+                                            pc += 4; //start ori inst
+                                             
+                                            instruction_in_hex = 0;
+                                            instruction_in_hex += temp_imm; // no need for bit masking
+                                         }
+                                        else{
+                                            instruction_in_hex = 0x3C010000;
+                                            instruction_in_hex += (temp_imm - 65535);
+                                            printf("--> machine code of current instruction: %08x\n", instruction_in_hex);
+                                            pc += 4; //start ori inst
+                                            
+                                            instruction_in_hex = 0;
+                                            instruction_in_hex += temp_imm & 0x0000FFFF; // bit mask for lower 16 bits only
+                                        }
+
+                                        i_type_check(&j, "ori", &instruction_in_hex, &i_type, &continue_check);
+                                        instruction_in_hex += (1 << 21);
+
+                                        for(k = 0; k < 32; k++){
+                                            if(strcmp(register_filenames[k], temp_reg) == 0){
+                                                instruction_in_hex += (k << 16);
+                                                break;
+                                            }
+                                        }
+                                        
+                                        printf("%08x\n--> machine code of current instruction: %08x\n", pc, instruction_in_hex);
+                                    }
+                                    reg = strtok(NULL, ",");
+                                    register_type++;
+                                }
                             }
                             if(pseudo == 2){ // la
-                                //lui
-                                pc += 4;
-                                //ori
+                                register_type = 0;
+                                reg = strtok(input_line, ",");
+                                while(reg != NULL){
+                                    if(reg[0] == '$'){ // register to be stored
+                                        temp_reg = reg;
+                                    }
+                                    else { // label
+                                        sscanf(reg, "%s", temp_label);
+                                        temp_imm = label_hunting(sym_table, temp_label);
+                                        upper_imm = temp_imm >> 16;
+                                        
+                                        instruction_in_hex = 0x3C010000; // $at added
+                                        instruction_in_hex += upper_imm;
+                                        printf("--> machine code of current instruction: %08x\n", instruction_in_hex);
+                                        pc += 4; //start ori inst
+                                        instruction_in_hex = 0;
+                                        instruction_in_hex += temp_imm & 0x0000FFFF; // bit mask for lower 16 bits only
+                                        
+                                        i_type_check(&j, "ori", &instruction_in_hex, &i_type, &continue_check);
+                                        instruction_in_hex += (1 << 21);
+
+                                        for(k = 0; k < 32; k++){
+                                            if(strcmp(register_filenames[k], temp_reg) == 0){
+                                                instruction_in_hex += (k << 16);
+                                                break;
+                                            }
+                                        }
+
+                                        printf("%08x\n--> machine code of current instruction: %08x\n", pc, instruction_in_hex);
+                                    }
+                                    reg = strtok(NULL, ",");
+                                    register_type++;
+                                }
                             }
                         }
                         else{
@@ -382,9 +503,9 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
             j_type = 0;
 
             if(input_line[input_string_len - 1] == ':'){ // label found; add to symbol table
-                input_line[input_string_len - 1] = '\0'; //remove colon from input
+                input_line[input_string_len - 1] = '\0'; // remove colon from input
                 if(pass_check){
-                    printf("label \"%s\" with address: %08x\n", input_line, pc);
+                    // printf("label \"%s\" with address: %08x\n", input_line, pc);
                     continue;
                 }
                 else{
@@ -407,9 +528,9 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                 if (continue_check == 0){
                     //PSEUDO ALERT
                     for(k = 0; k < 2; k++){
-                        if(strcmp(input_line, pseudo_list[j]) == 0){
-                            switch(j){
-                                case 0: // li
+                        if(strcmp(input_line, pseudo_list[k]) == 0){
+                            switch(k){
+                                case 0: // li                                  
                                     pseudo = 1;
                                     break;
                                 case 1: // la
@@ -422,6 +543,14 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                     printf("pseudoinstruction \'%s\' with address: ", input_line);
                 }
                 printf("%08x\n", pc);
+            }
+            else{ //pseudoinstruction check
+                for(k = 0; k < 2; k++){
+                    if(strcmp(input_line, pseudo_list[k]) == 0){
+                        pc += 4; //all current pseudoinstructions are two layered, hence pc + 4
+                        break;
+                    }
+                }
             }
         }
         else{
@@ -450,6 +579,7 @@ int main(void) {
     printf("Assemble: First-pass complete...\n");
     // second pass start
     fseek(fp, 0, SEEK_SET);
+    fscanf(fp, "%d", &lines);
     assembler_pass(lines, fp, sym_table, 1);
     printf("Assemble: Second-pass in progress...\n");
     return 0;
