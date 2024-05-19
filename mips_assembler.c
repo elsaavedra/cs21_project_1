@@ -25,7 +25,7 @@ void add_symboltable(FILE *stream, char *label, unsigned int address){
 
 void next_mod4(unsigned int *data_address){
     while(*data_address % 4 != 0){
-        *data_address += 2;
+        *data_address += 1;
     }
 }
 
@@ -410,29 +410,34 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                             printf("%d bytes allocated\n", data_num);
                         }
                         
-                        data_address += data_num * 8;
+                        data_address += data_num;
                     }
                     else if (strcmp(macro_call, "allocate_str") == 0){
                         if(pass_check){
                             printf("%d bytes allocated\n", data_num);
                         }
                         
-                        data_address += (strlen(rest) - 1) * 2; // temporary
-                        next_mod4(&data_address);
+                        data_address += (strlen(rest) - 1); // temporary
                     }
                 }
                 else if(ascii == 2){ // ascii
                     if(pass_check){
                         printf("%s\n", input_line);
                     }
-                    data_address += (strlen(input_line) - 1) * 2; // temporary
-                    next_mod4(&data_address);
+                    else{
+                        add_symboltable(sym_table, data_label, data_address);
+                    }
+                    data_address += (strlen(input_line)); // temporary
+                    
                 }
                 else if(ascii == 1){ // word
                     if(pass_check){
                         sscanf(input_line, "%d", &data_num);
-                        printf("%d\n", data_num);
+                        printf("%d (0x%08x)\n", data_num, data_address);
                         // printf("--> data (%d) address: %08x\n", data_num, data_address);
+                    }
+                    else{
+                        add_symboltable(sym_table, data_label, data_address);
                     }
                     data_address += 4;
                 }
@@ -604,6 +609,7 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                     ascii = 2;
                 }
                 else if(strcmp(input_line, ".word") == 0){
+                    next_mod4(&data_address); //pad for .word
                     ascii = 1;
                 }
             }
@@ -613,7 +619,7 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                 if(!pass_check){
                     if(data_segment){ // for .ascii and .word labels
                         //printf("add %s to symbol_table\n", input_line);
-                        add_symboltable(sym_table, input_line, data_address);
+                        strcpy(data_label, input_line);
                     }
                     else{
                         add_symboltable(sym_table, input_line, pc);
@@ -637,7 +643,7 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                     strtok(data_with_space, "(");
                     data_label = strtok(NULL, ",");
                     rest = strtok(NULL, ")");
-                    data_num = strlen(rest) - 1; // 2 is for quotation marks
+                    data_num = strlen(rest) - 1; // -2 for ", +1 for termination
                     
                     if(!pass_check){
                         add_symboltable(sym_table, data_label, data_address);
@@ -647,8 +653,7 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                     }
 
                     i++;
-                    data_address += data_num * 2; // since each character is 2 bits; temporary
-                    next_mod4(&data_address);
+                    data_address += data_num; // since each character is 2 bits; temporary
                 }
             }
             else if (pass_check){ //instruction found
