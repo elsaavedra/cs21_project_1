@@ -11,6 +11,7 @@
 
 // initialize register storages, following MIPS convention
 char *register_filenames[32] = {"$0", "$at", "$v0", "$v1", "$a0", "$a1", "$a2", "$a3", "$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6", "$t7" , "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7", "$t8", "$t9", "$k0", "$k1", "$gp", "$sp", "$fp", "$ra"};
+unsigned int *register_file[32] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 char *r_type_list[7] = {"add", "sub", "and", "or", "slt", "move", "jr"};
 char *i_type_list[8] = {"addi", "addiu", "beq", "bne", "sw", "lw", "lui", "ori"};
@@ -20,6 +21,12 @@ char *macro_list[5] = {"print_str", "read_str", "print_integer", "read_integer",
 
 void add_symboltable(FILE *stream, char *label, unsigned int address){
     fprintf(stream, "%s    0x%08x\n", label, address);
+}
+
+void next_mod4(unsigned int *data_address){
+    while(*data_address % 4 != 0){
+        *data_address += 2;
+    }
 }
 
 unsigned int label_hunting(FILE *sym_table, char *label){
@@ -329,8 +336,9 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
     int continue_check; // 0 = do not continue, 1 = continue
     int macros = 0;
 
-    //data segment storage of int/char
+    // for data segment
     unsigned int data_num;
+    int quote_check = 0;
     
     // tertiary boolean
     int register_type; // 0 = rd, 1 = rs, 2 = rt
@@ -346,8 +354,10 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
     char temp_label[CHAR_LIMIT];
 
     // for macros/data parsing
-    char macro_label[CHAR_LIMIT];
+    char macro_call[CHAR_LIMIT];
     char data_with_space[CHAR_LIMIT];
+    char *data_label;
+    char *rest;
     
     // iterations
     int i = 0;
@@ -375,49 +385,81 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
             continue; // skips address addition
         }
 
+        // for certain macros
+        strcpy(macro_call, input_line);
+        strtok(macro_call, "(");
+
         // increase iteration by 1 if newline is found; register values
         if (newline_check == '\n' || feof(fp)) {
             i++;
             if (data_segment) {
-                if(ascii == 2){
-                    printf("ascii found\n");
+                if(strcmp(macro_call, "allocate_bytes") == 0 || strcmp(macro_call, "allocate_str") == 0){
+                    strtok(input_line, "(");
+                    data_label = strtok(NULL, ",");
+                    // printf("label: %s\n", data_label);
+                    rest = strtok(NULL, ")");
+
+                    if(!pass_check){
+                        add_symboltable(sym_table, data_label, data_address);
+                    }
+                    
+                    if(strcmp(macro_call, "allocate_bytes") == 0){
+                        sscanf(rest, "%d", &data_num);
+                        
+                        if(pass_check){
+                            printf("%d bytes allocated\n", data_num);
+                        }
+                        
+                        data_address += data_num * 8;
+                    }
+                    else if (strcmp(macro_call, "allocate_str") == 0){
+                        if(pass_check){
+                            printf("%d bytes allocated\n", data_num);
+                        }
+                        
+                        data_address += (strlen(rest) - 1) * 2; // temporary
+                        next_mod4(&data_address);
+                    }
                 }
-                else if(ascii == 1){
-                    printf("input_line\n");
-                    sscanf(input_line, "%d", &data_num);
-                    printf("--> data (%d) address: %08x\n", data_num, data_address);
+                else if(ascii == 2){ // ascii
+                    if(pass_check){
+                        printf("%s\n", input_line);
+                    }
+                    data_address += (strlen(input_line) - 1) * 2; // temporary
+                    next_mod4(&data_address);
                 }
-                else{
-                    printf("allocate bytes\n");
+                else if(ascii == 1){ // word
+                    if(pass_check){
+                        sscanf(input_line, "%d", &data_num);
+                        printf("%d\n", data_num);
+                        // printf("--> data (%d) address: %08x\n", data_num, data_address);
+                    }
+                    data_address += 4;
                 }
-                data_address += 4;
             }
             else {
                 if(pass_check){
-                    strcpy(macro_label, input_line);
-                    strtok(macro_label, "(");
-
                     if(strcmp(input_line, "syscall") == 0){ // edgecase: syscall has no registers
                         printf("syscall instruction with address: %08x\n", pc);
                         instruction_in_hex = 0;
                         printf("--> machine code of current instruction: %08x\n", instruction_in_hex);
                     }
-                    else if(strcmp(input_line, macro_label) && i_type == 0){ // macro is found if the condition is non-zero
-                        printf("macro instruction (\"%s\") with address: %08x\n", macro_label, pc);
+                    else if(strcmp(input_line, macro_call) && i_type == 0){ // macro is found if the condition is non-zero
+                        printf("macro instruction (\"%s\") with address: %08x\n", macro_call, pc);
                         // macro pulling from macros.c
-                        if(strcmp(macro_list[0], macro_label) == 0){
+                        if(strcmp(macro_list[0], macro_call) == 0){
                             printf("%s", print_str());
                         }
-                        else if(strcmp(macro_list[1], macro_label) == 0){
+                        else if(strcmp(macro_list[1], macro_call) == 0){
                             printf("%s", read_str());
                         }
-                        else if(strcmp(macro_list[2], macro_label) == 0){
+                        else if(strcmp(macro_list[2], macro_call) == 0){
                             printf("%s", print_integer());
                         }
-                        else if(strcmp(macro_list[3], macro_label) == 0){
+                        else if(strcmp(macro_list[3], macro_call) == 0){
                             printf("%s", read_integer());
                         }
-                        else if(strcmp(macro_list[4], macro_label) == 0){
+                        else if(strcmp(macro_list[4], macro_call) == 0){
                             printf("%s", exit_macro());
                         }
                     }
@@ -568,11 +610,7 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
 
             if(input_line[input_string_len - 1] == ':'){ // label found; add to symbol table
                 input_line[input_string_len - 1] = '\0'; // remove colon from input
-                if(pass_check){
-                    // printf("label \"%s\" with address: %08x\n", input_line, pc);
-                    continue;
-                }
-                else{
+                if(!pass_check){
                     if(data_segment){ // for .ascii and .word labels
                         //printf("add %s to symbol_table\n", input_line);
                         add_symboltable(sym_table, input_line, data_address);
@@ -580,14 +618,14 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                     else{
                         add_symboltable(sym_table, input_line, pc);
                     }
+                    // printf("label \"%s\" with address: %08x\n", input_line, pc);
+                    continue;
                 }
             }
             else if (data_segment){
-                // for allocate_str
-                strcpy(macro_label, input_line);
-                strtok(macro_label, "(");
-                //printf("%s", macro_label);
-                if(strcmp(macro_label, "allocate_str") == 0){
+                if(strcmp(macro_call, "allocate_str") == 0){
+                    data_with_space[0] = '\0';
+                    
                     while(newline_check != '\n'){
                         strcat(data_with_space, input_line);
                         strcat(data_with_space, " ");
@@ -595,10 +633,22 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                     }
                     strcat(data_with_space, input_line);
                     strcat(data_with_space, " ");
-                    printf("%s\n", data_with_space);
+
+                    strtok(data_with_space, "(");
+                    data_label = strtok(NULL, ",");
+                    rest = strtok(NULL, ")");
+                    data_num = strlen(rest) - 1; // 2 is for quotation marks
+                    
+                    if(!pass_check){
+                        add_symboltable(sym_table, data_label, data_address);
+                    }
+                    else{
+                        printf("string: %s\n", rest);
+                    }
 
                     i++;
-                    data_address += 4;
+                    data_address += data_num * 2; // since each character is 2 bits; temporary
+                    next_mod4(&data_address);
                 }
             }
             else if (pass_check){ //instruction found
