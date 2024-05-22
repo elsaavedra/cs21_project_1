@@ -315,7 +315,7 @@ void j_type_check(int *j, char *input, unsigned int *machine_code, int *type_che
     }
 }
 
-void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
+void assembler_pass(int N, FILE *fp, FILE *sym_table, FILE *exec, int pass_check, unsigned int *i_l) {
     // general variables
     char whole_input_line[CHAR_LIMIT];
     char input_line[CHAR_LIMIT];
@@ -358,6 +358,8 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
     char data_with_space[CHAR_LIMIT];
     char *data_label;
     char *rest;
+    unsigned int label_addr;
+    int max_bytes;
     
     // iterations
     int i = 0;
@@ -453,19 +455,28 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
                         printf("macro instruction (\"%s\") with address: %08x\n", macro_call, pc);
                         // macro pulling from macros.c
                         if(strcmp(macro_list[0], macro_call) == 0){
-                            printf("%s", print_str());
+                            data_label = strtok(NULL, ")");
+                            label_addr = label_hunting(sym_table, data_label);
+                            // printf("print_str: %s located at %08x\n", data_label, label_addr);
+                            printf("%s", print_str(exec, &pc, label_addr));
                         }
                         else if(strcmp(macro_list[1], macro_call) == 0){
-                            printf("%s", read_str());
+                            data_label = strtok(NULL, ",");
+                            label_addr = label_hunting(sym_table, data_label);
+                            data_label = strtok(NULL, ")");
+                            sscanf(data_label, "%d", &max_bytes);
+                            printf("%s", read_str(exec, &pc, label_addr, max_bytes));
                         }
                         else if(strcmp(macro_list[2], macro_call) == 0){
-                            printf("%s", print_integer());
+                            data_label = strtok(NULL, ")");
+                            sscanf(data_label, "%d", &max_bytes);
+                            printf("%s", print_integer(exec, &pc, max_bytes));
                         }
                         else if(strcmp(macro_list[3], macro_call) == 0){
-                            printf("%s", read_integer());
+                            printf("%s", read_integer(exec, &pc));
                         }
                         else if(strcmp(macro_list[4], macro_call) == 0){
-                            printf("%s", exit_macro());
+                            printf("%s", exit_macro(exec, &pc));
                         }
                     }
                     else {
@@ -703,6 +714,10 @@ void assembler_pass(int N, FILE *fp, FILE *sym_table, int pass_check) {
     }
 }
 
+void execute_pass(int N, unsigned int *i_l){
+    return;
+}
+
 int main(void) {
     // open input file using fopen; if no txt file found, mips
     FILE *fp = fopen(INPUT_FILENAME, "r");
@@ -714,6 +729,9 @@ int main(void) {
     // create symboltable file
     FILE *sym_table = fopen("symboltable.txt", "w+");
 
+    // create symboltable file
+    FILE *exec = fopen("execute.txt", "w+");
+
     int lines;
     char temp_line[CHAR_LIMIT];
     
@@ -721,15 +739,17 @@ int main(void) {
     sscanf(temp_line, "%d\n", &lines);
     printf("%d\n", lines); //sanity check
 
+    unsigned int inst_list[lines];
+
     // first pass start
-    assembler_pass(lines, fp, sym_table, 0);
+    assembler_pass(lines, fp, sym_table, exec, 0, inst_list);
     printf("Assemble: First-pass complete...\n");
     
     // second pass start
     fseek(fp, 0, SEEK_SET);
     fgets(temp_line, CHAR_LIMIT, fp);
     sscanf(temp_line, "%d\n", &lines);
-    assembler_pass(lines, fp, sym_table, 1);
+    assembler_pass(lines, fp, sym_table, exec, 1, inst_list);
     printf("Assemble: Second-pass in progress...\n");
     return 0;
 }
