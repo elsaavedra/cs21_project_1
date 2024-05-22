@@ -1,16 +1,16 @@
+#include <stdio.h>
+
 #ifndef _MACROS_H_
 #define _MACROS_H_
 
-char *print_str();
+char *print_str(FILE *exec, unsigned int *pc, unsigned int address);
 
-char *print_str();
+char *read_str(FILE *exec, unsigned int *pc, unsigned int address, int max_bytes);
 
-char *read_str();
+char *print_integer(FILE *exec, unsigned int *pc, int my_int);
 
-char *print_integer();
+char *read_integer(FILE *exec, unsigned int *pc);
 
-char *read_integer();
-
-char *exit_macro();
+char *exit_macro(FILE *exec, unsigned int *pc);
 
 #endif
