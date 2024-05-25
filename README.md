@@ -2,7 +2,7 @@
 An implementation of the two-pass assembler MIPS Architecture in C. To run the code, download `mips.txt` and `mips_assembler` and run `mips_assembler` using a C compiler. Edit `mips.txt` for a different output (check Limitations section).
 
 ## Current Implementation
-As of **_May 20 2024_**, the following have been implemented:
+As of **_May 26 2024_**, the following have been implemented:
 - [x] Create a `symboltable.txt` containing the labels of instructions
 - [x] Finish first pass of assembler
 - [x] Implement R-Type instruction identifier
@@ -10,9 +10,9 @@ As of **_May 20 2024_**, the following have been implemented:
 - [x] Implement J-Type instruction identifier
 - [x] Implement pseudocode instruction identifier
 - [x] Implement data segment of code
-- [ ] Implement `macros.c`
-- [ ] Finish second pass of assembler
-- [ ] Execute MIPS code in console
+- [x] Implement `macros.c`
+- [x] Finish second pass of assembler
+- [x] Execute MIPS code in console
 - [ ] Polish final code for submission
 
 ## Macro file
